@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>PARCEL - Search</title>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link href="style.css" rel="stylesheet" type="text/css" />
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600&display=swap" rel="stylesheet">
+    <script>
+        function getElementbyInnerText(text){
+            for (var a of document.querySelectorAll(".listing-title")) {
+                if (a.innerText == text) return a;
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', function() {
+            const urlParams = new URLSearchParams(window.location.search);
+            var food_c = urlParams.get('food');
+            var location_c = urlParams.get('location');
+            document.getElementById("query-text").innerText = food_c + " in " + location_c;
+            
+            fetch('https://api.parcel.com/api/v1/inspire/', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8'
+                },
+                body: "food=" + food_c + "&location=" + location_c
+            }).then(function(response) { 
+                if(!response.ok) throw new Error("not ok"); 
+                return response.json() 
+            }).then((data)=>{
+                if(data.stat === "fail") throw new Error(data.message);
+                
+                var z = 0;
+                var p = '';
+                [...data['list']].forEach((item) => {
+                    const rc = item[1] > 0 ? "rating-positive" : "rating-negative";
+                    
+                    if (item[1] > 12 && z == 0) {
+                        z = 1;
+                        p = '<div class="divider"><p>The below restaurants may not be as accurate.</p></div>';
+                    }
+
+                    if (item[1] > 6) {
+                        document.getElementById("listing").innerHTML = p + 
+                            `<div class="listing">
+                                <div class="listing-title">${item[0]}</div>
+                                <div class="listing-sim"><b>Also known as:</b> ${data['names'][item[0]].join(", ")}</div>
+                                <div class="listing-rating ${rc}">${Math.round(item[1]*10)/10}</div>
+                            </div>` + document.getElementById("listing").innerHTML;
+                        p = '';
+                    }
+
+                    if (item[1] > 11) {
+                        fetch('https://api.parcel.com/api/v1/invoke/?' + 
+                            "name=" + item[0] + "&location=" + location_c + "&food=" + food_c, {
+                            method: 'GET'
+                        }).then(function(response) {
+                            if(!response.ok) throw new Error("not ok");
+                            return response.json()
+                        }).then((data_2)=>{
+                            if(data_2.stat === "fail") throw new Error(data_2.message);
+                            
+                            var z = getElementbyInnerText(item[0]);
+                            if (data_2['results'][0]['name'].length > 1) {
+                                z.innerText = data_2['results'][0]['name'];
+                                const status = data_2['results'][0]['status'] == 'ACTIVE' 
+                                    ? '<div class="listing-status status-active">Active</div>'
+                                    : '<div class="listing-status status-failed">Permanently Closed</div>';
+                                
+                                z.outerHTML += status + 
+                                    `<div class="listing-address">
+                                        <a href="https://google.com/search?q=${encodeURIComponent(data_2['results'][0]['name'])} ${encodeURIComponent(location_c)}">
+                                            ${data_2['results'][0]['address']}
+                                        </a>
+                                    </div>`;
+                            }
+                        }).catch(console.error);
+                    }
+                });
+                document.getElementById("loading").style.display = "none";
+            }).catch(function(err) {
+                document.getElementById("loading-text").innerText = "Error.";
+                document.getElementById("loading-text-below").innerText = "Please try again.";
+            });
+
+            const loadingStates = [
+                "Parsing Comments...",
+                "Extracting Restaurants...",
+                "Calculating Relevancy...",
+                "Extracting Sentiment...",
+                "Compiling Results...",
+                "Sorting Similar Restaurants...",
+                "Hold on...This is taking a bit longer than expected."
+            ];
+
+            let currentState = 0;
+            function updateLoadingState() {
+                if (currentState < loadingStates.length) {
+                    document.getElementById("loading-text").innerText = loadingStates[currentState];
+                    currentState++;
+                    const delay = ((Math.floor(Math.random() * 6) + 4) * 1000);
+                    setTimeout(updateLoadingState, delay);
+                }
+            }
+            setTimeout(updateLoadingState, 2000);
+        });
+    </script>
+</head>
+
+<body>
+    <div class="header header-short">
+        <div class="header-bar">
+            <div class="nav-item">
+                <a href="/" class="site-title">PARCEL</a>
+            </div>
+            <div class="nav-item nav-menu">
+                <a href="/about" class="nav-menu-item">About</a>
+                <a href="/workings" class="nav-menu-item">How it Works</a>
+            </div>
+        </div>
+        <div class="header-input-section">
+            <div class="header-title">
+                <h1 id="query-text"></h1>
+            </div>
+        </div>
+    </div>
+  
+    <div class="container" id="listing">
+        <div class="explain">
+            <div class="tooltip">Interpreting the Score</div>
+            <div class="tooltip-open">
+                Computed score based on reviews and ratings.
+                <a href="/about">Learn more.</a>
+            </div>
+        </div>
+        <div class="loading" id="loading">
+            <div class="lds-ripple"><div></div><div></div></div>
+            <div class="loading-text" id="loading-text">Fetching results...</div>
+            <div class="loading-text-below" id="loading-text-below">This may take up to 90 seconds.</div>
+        </div>
+    </div>
+
+    <!-- Google Analytics -->
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-7QPJK74EEM"></script>
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('js', new Date());
+        gtag('config', 'G-7QPJK74EEM');
+    </script>
+</body>
+</html>
